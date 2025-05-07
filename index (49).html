@@ -1,0 +1,1235 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Online-Shop</title>
+    <link href="https://unpkg.com/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
+        body {
+            display: flex;
+            flex-direction: column;
+        }
+        main {
+            flex: 1 0 auto;
+        }
+        footer {
+            flex-shrink: 0;
+        }
+        .wiggle {
+            animation: wiggle 0.3s ease-in-out;
+        }
+        @keyframes wiggle {
+            0% { transform: rotate(0deg); }
+            25% { transform: rotate(-3deg); }
+            50% { transform: rotate(3deg); }
+            75% { transform: rotate(-3deg); }
+            100% { transform: rotate(0deg); }
+        }
+        .drag-over {
+            border: 2px dashed #3b82f6;
+            background-color: #e0f2fe;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+    <!-- Header -->
+    <header class="bg-white shadow">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center">
+                <button id="home-btn" class="mr-4 text-blue-500 hover:text-blue-700 wiggle-on-click">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                    </svg>
+                </button>
+                <h1 id="shop-name" class="text-2xl font-bold">Mein Shop</h1>
+            </div>
+            <div class="flex items-center">
+                <div id="user-status" class="mr-4 flex items-center">
+                    Angemeldet als: Gast
+                    <span id="user-icon" class="ml-2 hidden"></span>
+                </div>
+                <button id="settings-btn" class="hidden mr-4 text-blue-500 hover:text-blue-700 wiggle-on-click">Einstellungen</button>
+                <button id="cart-btn" class="mr-4 text-blue-500 hover:text-blue-700 wiggle-on-click">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+                    </svg>
+                </button>
+                <button id="login-btn" class="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center wiggle-on-click">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Settings for Admin -->
+    <div id="settings-panel" class="hidden container mx-auto px-4 py-4 bg-white shadow mt-4">
+        <h2 class="text-xl font-bold mb-4">Einstellungen (Admin)</h2>
+        <div class="flex">
+            <!-- Sidebar -->
+            <div class="w-1/4 bg-gray-100 p-4 rounded-l-lg">
+                <ul>
+                    <li><button id="tab-allgemein" class="w-full text-left px-4 py-2 bg-blue-500 text-white rounded mb-2 wiggle-on-click">Allgemein</button></li>
+                    <li><button id="tab-produkte" class="w-full text-left px-4 py-2 bg-gray-200 rounded mb-2 wiggle-on-click">Produkte</button></li>
+                    <li><button id="tab-zahlungen" class="w-full text-left px-4 py-2 bg-gray-200 rounded mb-2 wiggle-on-click">Zahlungen</button></li>
+                    <li><button id="tab-rechtliches" class="w-full text-left px-4 py-2 bg-gray-200 rounded mb-2 wiggle-on-click">Rechtliches</button></li>
+                    <li><button id="tab-bestellungen" class="w-full text-left px-4 py-2 bg-gray-200 rounded mb-2 wiggle-on-click">Bestellungen</button></li>
+                    <li><button id="tab-analytics" class="w-full text-left px-4 py-2 bg-gray-200 rounded mb-2 wiggle-on-click">Analytics</button></li>
+                </ul>
+            </div>
+            <!-- Content -->
+            <div class="w-3/4 p-4">
+                <!-- Allgemein -->
+                <div id="content-allgemein">
+                    <form id="settings-form">
+                        <div class="mb-4">
+                            <label class="block mb-1 font-bold">Shop-Name</label>
+                            <input id="settings-shop-name" type="text" class="w-full p-2 border rounded" value="Mein Shop">
+                        </div>
+                        <div class="mb-4">
+                            <label class="block mb-1 font-bold">Hauptbanner-Bild</label>
+                            <div id="main-banner-dropzone" class="border-2 border-dashed p-4 rounded text-center cursor-pointer wiggle-on-click">
+                                <p>Ziehen Sie ein Bild hierher oder klicken Sie, um eine Datei auszuwählen</p>
+                                <input id="main-banner-input" type="file" accept="image/*" class="hidden">
+                            </div>
+                            <img id="main-banner-preview" src="https://via.placeholder.com/1200x300" alt="Banner-Vorschau" class="w-full h-48 object-cover rounded mt-2 hidden">
+                        </div>
+                        <div class="mb-4">
+                            <label class="block mb-1 font-bold">Social Media Links</label>
+                            <input id="settings-youtube" type="text" class="w-full p-2 border rounded mb-2" placeholder="YouTube URL" value="https://youtube.com">
+                            <input id="settings-tiktok" type="text" class="w-full p-2 border rounded mb-2" placeholder="TikTok URL" value="https://tiktok.com">
+                            <input id="settings-instagram" type="text" class="w-full p-2 border rounded" placeholder="Instagram URL" value="https://instagram.com">
+                        </div>
+                        <div class="mb-4">
+                            <label class="block mb-1 font-bold">Support-Informationen</label>
+                            <input id="settings-phone" type="text" class="w-full p-2 border rounded mb-2" value="+49 123 456789">
+                            <input id="settings-hours" type="text" class="w-full p-2 border rounded" value="Montag bis Freitag, 9:00–17:00 Uhr">
+                        </div>
+                        <div class="mb-4">
+                            <label class="block mb-1 font-bold">Footer-Text</label>
+                            <input id="settings-footer-text" type="text" class="w-full p-2 border rounded" value="Alle Rechte vorbehalten">
+                        </div>
+                        <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded wiggle-on-click">Speichern</button>
+                    </form>
+                </div>
+                <!-- Produkte -->
+                <div id="content-produkte" class="hidden">
+                    <div class="mb-4">
+                        <h3 class="font-bold mb-2">Manuelles Produkt hinzufügen</h3>
+                        <input id="manual-product-name" type="text" class="w-full p-2 border rounded mb-2" placeholder="Produktname">
+                        <input id="manual-product-price" type="number" step="0.01" class="w-full p-2 border rounded mb-2" placeholder="Preis in €">
+                        <select id="manual-product-category" class="w-full p-2 border rounded mb-2">
+                            <option value="Kleidung">Kleidung</option>
+                            <option value="Accessoires">Accessoires</option>
+                            <option value="Dekoration">Dekoration</option>
+                        </select>
+                        <div class="border-2 border-dashed p-2 rounded text-center cursor-pointer mb-2 wiggle-on-click">
+                            <p>Ziehen Sie ein Produktbild hierher oder klicken Sie, um eine Datei auszuwählen</p>
+                            <input id="manual-product-image" type="file" accept="image/*" class="hidden">
+                        </div>
+                        <div class="border-2 border-dashed p-2 rounded text-center cursor-pointer mb-2 wiggle-on-click">
+                            <p>Ziehen Sie ein Banner-Bild hierher oder klicken Sie, um eine Datei auszuwählen (optional)</p>
+                            <input id="manual-product-banner" type="file" accept="image/*" class="hidden">
+                        </div>
+                        <button id="add-manual-product" class="bg-blue-500 text-white px-4 py-2 rounded wiggle-on-click">Produkt hinzufügen</button>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block mb-1 font-bold">Printful API-Schlüssel</label>
+                        <input id="printful-api-key" type="text" class="w-full p-2 border rounded" placeholder="Printful API-Schlüssel">
+                        <button id="load-printful-products" class="bg-blue-500 text-white px-4 py-2 rounded mt-2 wiggle-on-click">Produkte von Printful laden</button>
+                    </div>
+                    <div id="printful-products-list" class="mt-4"></div>
+                    <button id="upload-all-products" class="bg-green-500 text-white px-4 py-2 rounded mt-4 hidden wiggle-on-click">Alle Produkte reinladen</button>
+                </div>
+                <!-- Zahlungen -->
+                <div id="content-zahlungen" class="hidden">
+                    <form id="payment-form">
+                        <div class="mb-4">
+                            <label class="flex items-center">
+                                <input id="payment-creditcard" type="checkbox" class="mr-2">
+                                <span>Kreditkarte aktivieren (Stripe)</span>
+                            </label>
+                        </div>
+                        <div class="mb-4">
+                            <label class="flex items-center">
+                                <input id="payment-paypal" type="checkbox" class="mr-2">
+                                <span>PayPal aktivieren</span>
+                            </label>
+                            <input id="paypal-api-key" type="text" class="w-full p-2 border rounded mt-2" placeholder="PayPal API-Schlüssel">
+                        </div>
+                        <div class="mb-4">
+                            <label class="flex items-center">
+                                <input id="payment-stripe" type="checkbox" class="mr-2">
+                                <span>Stripe aktivieren</span>
+                            </label>
+                            <input id="stripe-api-key" type="text" class="w-full p-2 border rounded mt-2" placeholder="Stripe API-Schlüssel">
+                        </div>
+                        <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded wiggle-on-click">Speichern</button>
+                    </form>
+                </div>
+                <!-- Rechtliches -->
+                <div id="content-rechtliches" class="hidden">
+                    <form id="legal-form">
+                        <div class="mb-4">
+                            <label class="block mb-1 font-bold">AGB</label>
+                            <textarea id="legal-agb" class="w-full p-2 border rounded" rows="4" placeholder="AGB Text"></textarea>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block mb-1 font-bold">Impressum</label>
+                            <textarea id="legal-impressum" class="w-full p-2 border rounded" rows="4" placeholder="Impressum Text"></textarea>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block mb-1 font-bold">Datenschutz</label>
+                            <textarea id="legal-datenschutz" class="w-full p-2 border rounded" rows="4" placeholder="Datenschutz Text"></textarea>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block mb-1 font-bold">Widerrufsrecht</label>
+                            <textarea id="legal-widerruf" class="w-full p-2 border rounded" rows="4" placeholder="Widerrufsrecht Text"></textarea>
+                        </div>
+                        <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded wiggle-on-click">Speichern</button>
+                    </form>
+                </div>
+                <!-- Bestellungen -->
+                <div id="content-bestellungen" class="hidden">
+                    <div class="mb-4">
+                        <h3 class="font-bold">Bestellungen</h3>
+                        <div id="orders-list" class="mt-2"></div>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block mb-1 font-bold">Admin-Schlüssel ändern</label>
+                        <input id="new-admin-key" type="text" class="w-full p-2 border rounded" placeholder="Neuer Schlüssel">
+                        <button id="change-admin-key" class="bg-blue-500 text-white px-4 py-2 rounded mt-2 wiggle-on-click">Schlüssel ändern</button>
+                    </div>
+                </div>
+                <!-- Analytics -->
+                <div id="content-analytics" class="hidden">
+                    <div class="mb-4">
+                        <h3 class="font-bold text-xl mb-4">Analytics</h3>
+                        <p class="text-lg"><strong>Monatlicher Umsatz:</strong> § <span id="monthly-revenue" class="text-2xl font-semibold">0,00 €</span></p>
+                        <p class="text-lg"><strong>Täglicher Umsatz:</strong> § <span id="daily-revenue" class="text-2xl font-semibold">0,00 €</span></p>
+                        <p class="text-lg"><strong>Gesamtumsatz:</strong> § <span id="total-revenue" class="text-2xl font-semibold">0,00 €</span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Warenkorb Modal -->
+    <div id="cart-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+        <div class="bg-white p-6 rounded-lg w-full max-w-md">
+            <h2 class="text-xl font-bold mb-4">Warenkorb</h2>
+            <div id="cart-items" class="mb-4"></div>
+            <p id="cart-total" class="font-bold mb-4">Gesamt: 0,00 €</p>
+            <button id="checkout-btn" class="bg-blue-500 text-white px-4 py-2 rounded mb-4 w-full wiggle-on-click">Checkout</button>
+            <button id="close-cart" class="bg-gray-500 text-white px-4 py-2 rounded w-full wiggle-on-click">Schließen</button>
+        </div>
+    </div>
+
+    <!-- Checkout Modal -->
+    <div id="checkout-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+        <div class="bg-white p-6 rounded-lg w-full max-w-md">
+            <h2 class="text-xl font-bold mb-4">Checkout</h2>
+            <div class="mb-4">
+                <label class="block mb-1">E-Mail-Adresse:</label>
+                <input id="checkout-email" type="email" class="w-full p-2 border rounded" placeholder="Ihre E-Mail-Adresse" required>
+            </div>
+            <div class="mb-4">
+                <label class="block mb-1">Name:</label>
+                <input id="checkout-name" type="text" class="w-full p-2 border rounded" placeholder="Ihr Name" required>
+            </div>
+            <div class="mb-4">
+                <label class="block mb-1">Passwort:</label>
+                <input id="checkout-password" type="password" class="w-full p-2 border rounded" placeholder="Ihr Passwort" required>
+            </div>
+            <div class="mb-4">
+                <label class="block mb-1">Lieferadresse:</label>
+                <input id="checkout-address" type="text" class="w-full p-2 border rounded" placeholder="Straße und Hausnummer" required>
+            </div>
+            <div class="mb-4">
+                <label class="block mb-1">Stadt:</label>
+                <input id="checkout-city" type="text" class="w-full p-2 border rounded" placeholder="Stadt" required>
+            </div>
+            <div class="mb-4">
+                <label class="block mb-1">Land:</label>
+                <input id="checkout-country" type="text" class="w-full p-2 border rounded" placeholder="Land" required>
+            </div>
+            <div class="mb-4">
+                <label class="block mb-1">Zahlungsmethode:</label>
+                <select id="checkout-payment-method" class="w-full p-2 border rounded">
+                    <!-- Zahlungsmethoden werden dynamisch gefüllt -->
+                </select>
+            </div>
+            <div class="flex justify-between">
+                <button id="buy-btn" class="bg-blue-500 text-white px-4 py-2 rounded wiggle-on-click">Kaufen</button>
+                <button id="close-checkout" class="bg-gray-500 text-white px-4 py-2 rounded wiggle-on-click">Abbrechen</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legal Modal -->
+    <div id="legal-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+        <div class="bg-white p-6 rounded-lg w-full max-w-md">
+            <h2 id="legal-modal-title" class="text-xl font-bold mb-4"></h2>
+            <pre id="legal-modal-content" class="whitespace-pre-wrap mb-4"></pre>
+            <button id="close-legal-modal" class="bg-gray-500 text-white px-4 py-2 rounded w-full wiggle-on-click">Schließen</button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main id="home-section" class="container mx-auto px-4 py-8">
+        <div id="main-banner" class="mb-8">
+            <img src="https://via.placeholder.com/1200x300" alt="Hauptbanner" class="w-full h-48 object-cover rounded">
+        </div>
+        <div id="product-categories"></div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white py-8">
+        <div class="container mx-auto px-4">
+            <div class="flex flex-col md:flex-row justify-between">
+                <div>
+                    <h3 id="footer-shop-name" class="text-xl font-bold">Mein Shop</h3>
+                    <p id="footer-phone">Telefon: +49 123 456789</p>
+                    <p id="footer-hours">Montag bis Freitag, 9:00–17:00 Uhr</p>
+                    <p id="footer-text">Alle Rechte vorbehalten</p>
+                </div>
+                <div class="mt-4 md:mt-0">
+                    <ul>
+                        <li><a id="footer-agb" href="#" class="hover:underline wiggle-on-click">AGB</a></li>
+                        <li><a id="footer-impressum" href="#" class="hover:underline wiggle-on-click">Impressum</a></li>
+                        <li><a id="footer-datenschutz" href="#" class="hover:underline wiggle-on-click">Datenschutz</a></li>
+                        <li><a id="footer-widerruf" href="#" class="hover:underline wiggle-on-click">Widerrufsrecht</a></li>
+                    </ul>
+                </div>
+                <div class="mt-4 md:mt-0">
+                    <ul>
+                        <li><a id="footer-youtube" href="https://youtube.com" class="hover:underline wiggle-on-click">YouTube</a></li>
+                        <li><a id="footer-tiktok" href="https://tiktok.com" class="hover:underline wiggle-on-click">TikTok</a></li>
+                        <li><a id="footer-instagram" href="https://instagram.com" class="hover:underline wiggle-on-click">Instagram</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Login Modal -->
+    <div id="login-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+        <div class="bg-white p-6 rounded-lg w-full max-w-md">
+            <h2 class="text-xl font-bold mb-4">Anmeldung</h2>
+            <form id="login-form">
+                <div class="mb-4">
+                    <label class="block mb-1">E-Mail:</label>
+                    <input id="login-email" type="email" class="w-full p-2 border rounded" required>
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-1">Passwort:</label>
+                    <input id="login-password" type="password" class="w-full p-2 border rounded" required>
+                </div>
+                <div id="admin-key-field" class="mb-4 hidden">
+                    <label class="block mb-1">Admin-Schlüssel:</label>
+                    <input id="admin-key" type="text" class="w-full p-2 border rounded">
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-1">Business-Icon auswählen:</label>
+                    <div class="flex space-x-2">
+                        <label class="flex items-center">
+                            <input type="radio" name="icon" value="briefcase" class="mr-1" required>
+                            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="radio" name="icon" value="chart" class="mr-1">
+                            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                            </svg>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="radio" name="icon" value="building" class="mr-1">
+                            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21h18a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2zM7 7h10m-5 4v6m-3-3h6"/>
+                            </svg>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="radio" name="icon" value="laptop" class="mr-1">
+                            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2a2 2 0 012-2h2a2 2 0 012 2v2m-6 0H5a2 2 0 00-2 2v1h14v-1a2 2 0 00-2-2h-4zm-4-9h10a2 2 0 012 2v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4a2 2 0 012-2z"/>
+                            </svg>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="radio" name="icon" value="money" class="mr-1">
+                            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                        </label>
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label class="flex items-center">
+                        <input id="admin-checkbox" type="checkbox" class="mr-2">
+                        <span>Als Admin anmelden</span>
+                    </label>
+                </div>
+                <div class="flex justify-between">
+                    <button type="submit" id="login-submit-btn" class="bg-blue-500 text-white px-4 py-2 rounded flex items-center justify-center wiggle-on-click">
+                        <span id="login-icon-placeholder"></span>
+                        <span class="ml-2">Anmelden</span>
+                    </button>
+                    <button id="cancel-login" type="button" class="bg-gray-500 text-white px-4 py-2 rounded wiggle-on-click">Abbrechen</button>
+                </div>
+            </form>
+            <button id="logout-btn" class="hidden bg-red-500 text-white px-4 py-2 rounded mt-4 w-full wiggle-on-click">Abmelden</button>
+        </div>
+    </div>
+
+    <script>
+        // Simulierte Benutzerdaten
+        const users = {
+            'kunde@example.com': { password: 'kunde123', role: 'kunde' },
+            'admin@example.com': { password: 'admin123', role: 'admin', key: '12345' },
+            'astroversearchiv@gmail.com': { password: 'justin$king1', role: 'admin', key: '12345' }
+        };
+
+        let currentUser = { role: 'gast', icon: '' };
+        let orders = [];
+        let totalRevenue = 0;
+        let monthlyRevenue = 0;
+        let dailyRevenue = 0;
+        let printfulProducts = [];
+        let cart = [];
+        let paymentSettings = {
+            creditcard: false,
+            paypal: false,
+            stripe: false,
+            paypalApiKey: '',
+            stripeApiKey: ''
+        };
+        let categories = {};
+        let legalContent = {
+            agb: '',
+            impressum: '',
+            datenschutz: '',
+            widerruf: ''
+        };
+
+        // Elemente
+        const loginBtn = document.getElementById('login-btn');
+        const loginModal = document.getElementById('login-modal');
+        const loginForm = document.getElementById('login-form');
+        const loginSubmitBtn = document.getElementById('login-submit-btn');
+        const loginIconPlaceholder = document.getElementById('login-icon-placeholder');
+        const cancelLogin = document.getElementById('cancel-login');
+        const logoutBtn = document.getElementById('logout-btn');
+        const userStatus = document.getElementById('user-status');
+        const userIcon = document.getElementById('user-icon');
+        const adminCheckbox = document.getElementById('admin-checkbox');
+        const adminKeyField = document.getElementById('admin-key-field');
+        const settingsPanel = document.getElementById('settings-panel');
+        const settingsForm = document.getElementById('settings-form');
+        const paymentForm = document.getElementById('payment-form');
+        const settingsBtn = document.getElementById('settings-btn');
+        const cartBtn = document.getElementById('cart-btn');
+        const cartModal = document.getElementById('cart-modal');
+        const cartItems = document.getElementById('cart-items');
+        const cartTotal = document.getElementById('cart-total');
+        const checkoutBtn = document.getElementById('checkout-btn');
+        const closeCart = document.getElementById('close-cart');
+        const checkoutModal = document.getElementById('checkout-modal');
+        const checkoutEmail = document.getElementById('checkout-email');
+        const checkoutName = document.getElementById('checkout-name');
+        const checkoutPassword = document.getElementById('checkout-password');
+        const checkoutAddress = document.getElementById('checkout-address');
+        const checkoutCity = document.getElementById('checkout-city');
+        const checkoutCountry = document.getElementById('checkout-country');
+        const checkoutPaymentMethod = document.getElementById('checkout-payment-method');
+        const buyBtn = document.getElementById('buy-btn');
+        const closeCheckout = document.getElementById('close-checkout');
+        const legalModal = document.getElementById('legal-modal');
+        const legalModalTitle = document.getElementById('legal-modal-title');
+        const legalModalContent = document.getElementById('legal-modal-content');
+        const closeLegalModal = document.getElementById('close-legal-modal');
+        const mainBanner = document.getElementById('main-banner')?.querySelector('img');
+        const homeSection = document.getElementById('home-section');
+        const homeBtn = document.getElementById('home-btn');
+        const mainBannerDropzone = document.getElementById('main-banner-dropzone');
+        const mainBannerInput = document.getElementById('main-banner-input');
+        const mainBannerPreview = document.getElementById('main-banner-preview');
+        const tabs = {
+            allgemein: document.getElementById('tab-allgemein'),
+            produkte: document.getElementById('tab-produkte'),
+            zahlungen: document.getElementById('tab-zahlungen'),
+            rechtliches: document.getElementById('tab-rechtliches'),
+            bestellungen: document.getElementById('tab-bestellungen'),
+            analytics: document.getElementById('tab-analytics')
+        };
+        const contents = {
+            allgemein: document.getElementById('content-allgemein'),
+            produkte: document.getElementById('content-produkte'),
+            zahlungen: document.getElementById('content-zahlungen'),
+            rechtliches: document.getElementById('content-rechtliches'),
+            bestellungen: document.getElementById('content-bestellungen'),
+            analytics: document.getElementById('content-analytics')
+        };
+        const ordersList = document.getElementById('orders-list');
+        const changeAdminKey = document.getElementById('change-admin-key');
+        const loadPrintfulProducts = document.getElementById('load-printful-products');
+        const uploadAllProducts = document.getElementById('upload-all-products');
+        const printfulProductsList = document.getElementById('printful-products-list');
+        const manualProductName = document.getElementById('manual-product-name');
+        const manualProductPrice = document.getElementById('manual-product-price');
+        const manualProductCategory = document.getElementById('manual-product-category');
+        const manualProductImage = document.getElementById('manual-product-image');
+        const manualProductBanner = document.getElementById('manual-product-banner');
+        const addManualProduct = document.getElementById('add-manual-product');
+        const productCategories = document.getElementById('product-categories');
+        const footerAgb = document.getElementById('footer-agb');
+        const footerImpressum = document.getElementById('footer-impressum');
+        const footerDatenschutz = document.getElementById('footer-datenschutz');
+        const footerWiderruf = document.getElementById('footer-widerruf');
+
+        // Business-Icon-SVGs
+        const icons = {
+            briefcase: `<svg class="w-6 h-6 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>`,
+            chart: `<svg class="w-6 h-6 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>`,
+            building: `<svg class="w-6 h-6 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21h18a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2zM7 7h10m-5 4v6m-3-3h6"/></svg>`,
+            laptop: `<svg class="w-6 h-6 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2a2 2 0 012-2h2a2 2 0 012 2v2m-6 0H5a2 2 0 00-2 2v1h14v-1a2 2 0 00-2-2h-4zm-4-9h10a2 2 0 012 2v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4a2 2 0 012-2z"/></svg>`,
+            money: `<svg class="w-6 h-6 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`
+        };
+
+        // Wackeleffekt für alle Elemente mit der Klasse "wiggle-on-click"
+        document.querySelectorAll('.wiggle-on-click').forEach(element => {
+            if (element) {
+                element.addEventListener('click', () => {
+                    element.classList.add('wiggle');
+                });
+            }
+        });
+
+        // Warenkorb anzeigen
+        if (cartBtn) {
+            cartBtn.addEventListener('click', () => {
+                cartModal.classList.remove('hidden');
+                updateCart();
+            });
+        }
+
+        // Warenkorb schließen
+        if (closeCart) {
+            closeCart.addEventListener('click', () => {
+                cartModal.classList.add('hidden');
+            });
+        }
+
+        // Checkout-Modal anzeigen
+        if (checkoutBtn) {
+            checkoutBtn.addEventListener('click', () => {
+                if (cart.length === 0) {
+                    alert('Ihr Warenkorb ist leer.');
+                    return;
+                }
+                cartModal.classList.add('hidden');
+                checkoutModal.classList.remove('hidden');
+            });
+        }
+
+        // Checkout-Modal schließen
+        if (closeCheckout) {
+            closeCheckout.addEventListener('click', () => {
+                checkoutModal.classList.add('hidden');
+            });
+        }
+
+        // Legal-Modal schließen
+        if (closeLegalModal) {
+            closeLegalModal.addEventListener('click', () => {
+                legalModal.classList.add('hidden');
+            });
+        }
+
+        // Warenkorb aktualisieren
+        function updateCart() {
+            if (!cartItems || !cartTotal || !checkoutPaymentMethod) return;
+            cartItems.innerHTML = '';
+            let total = 0;
+            cart.forEach((item, index) => {
+                total += item.price;
+                const cartItem = document.createElement('div');
+                cartItem.className = 'flex justify-between mb-2';
+                cartItem.innerHTML = `
+                    <span>${item.name} - ${item.price.toFixed(2)} €</span>
+                    <button class="remove-cart-item text-red-500 wiggle-on-click" data-index="${index}">Entfernen</button>
+                `;
+                cartItems.appendChild(cartItem);
+            });
+            cartTotal.textContent = `Gesamt: ${total.toFixed(2)} €`;
+
+            // Zahlungsmethoden im Checkout aktualisieren
+            checkoutPaymentMethod.innerHTML = '';
+            if (paymentSettings.paypal) {
+                const option = document.createElement('option');
+                option.value = 'paypal';
+                option.textContent = 'PayPal';
+                checkoutPaymentMethod.appendChild(option);
+            }
+            if (paymentSettings.stripe) {
+                const option = document.createElement('option');
+                option.value = 'stripe';
+                option.textContent = 'Stripe';
+                checkoutPaymentMethod.appendChild(option);
+            }
+            if (paymentSettings.creditcard) {
+                const option = document.createElement('option');
+                option.value = 'creditcard';
+                option.textContent = 'Kreditkarte (Stripe)';
+                checkoutPaymentMethod.appendChild(option);
+            }
+        }
+
+        // Artikel aus Warenkorb entfernen
+        if (cartItems) {
+            cartItems.addEventListener('click', (e) => {
+                if (e.target.classList.contains('remove-cart-item')) {
+                    const index = e.target.getAttribute('data-index');
+                    cart.splice(index, 1);
+                    updateCart();
+                }
+            });
+        }
+
+        // Kaufen
+        if (buyBtn) {
+            buyBtn.addEventListener('click', () => {
+                if (!checkoutEmail.value || !checkoutName.value || !checkoutPassword.value || !checkoutAddress.value || !checkoutCity.value || !checkoutCountry.value) {
+                    alert('Bitte füllen Sie alle Felder aus.');
+                    return;
+                }
+
+                const paymentMethod = checkoutPaymentMethod.value;
+                const email = checkoutEmail.value;
+                const name = checkoutName.value;
+                const address = checkoutAddress.value;
+                const city = checkoutCity.value;
+                const country = checkoutCountry.value;
+                const total = cart.reduce((sum, item) => sum + item.price, 0);
+                const order = {
+                    id: orders.length + 1,
+                    items: [...cart],
+                    total,
+                    email,
+                    name,
+                    address,
+                    city,
+                    country,
+                    paymentMethod,
+                    date: new Date().toISOString()
+                };
+                orders.push(order);
+
+                // Zahlung simulieren
+                if (paymentMethod === 'paypal' && paymentSettings.paypal) {
+                    console.log(`Zahlung von ${total.toFixed(2)} € via PayPal an Ihr PayPal-Konto gesendet (API-Schlüssel: ${paymentSettings.paypalApiKey})`);
+                } else if ((paymentMethod === 'stripe' || paymentMethod === 'creditcard') && (paymentSettings.stripe || paymentSettings.creditcard)) {
+                    console.log(`Zahlung von ${total.toFixed(2)} € via ${paymentMethod === 'creditcard' ? 'Kreditkarte (Stripe)' : 'Stripe'} an Ihr Stripe-Konto gesendet (API-Schlüssel: ${paymentSettings.stripeApiKey})`);
+                } else {
+                    alert('Diese Zahlungsmethode ist nicht aktiviert.');
+                    return;
+                }
+
+                // Simulierte Weiterleitung an Printful mit API-Schlüssel
+                const printfulApiKey = document.getElementById('printful-api-key').value;
+                console.log(`Bestellung an Printful gesendet (API-Schlüssel: ${printfulApiKey}):`, order);
+
+                // Bestellungen in der Bibliothek anzeigen
+                const orderItem = document.createElement('div');
+                orderItem.className = 'flex justify-between p-2 border-b';
+                orderItem.innerHTML = `
+                    <span>Bestellung #${order.id}: ${total.toFixed(2)} € (Zahlungsmethode: ${paymentMethod})</span>
+                    <button class="download-invoice text-blue-500 wiggle-on-click" data-id="${order.id}">Rechnung als PDF herunterladen</button>
+                `;
+                ordersList.appendChild(orderItem);
+
+                // Umsatz aktualisieren
+                totalRevenue += total;
+                monthlyRevenue += total;
+                dailyRevenue += total;
+                document.getElementById('total-revenue').textContent = `${totalRevenue.toFixed(2)} €`;
+                document.getElementById('monthly-revenue').textContent = `${monthlyRevenue.toFixed(2)} €`;
+                document.getElementById('daily-revenue').textContent = `${dailyRevenue.toFixed(2)} €`;
+
+                // Warenkorb leeren
+                cart = [];
+                updateCart();
+                checkoutModal.classList.add('hidden');
+            });
+        }
+
+        // Rechnung herunterladen
+        if (ordersList) {
+            ordersList.addEventListener('click', (e) => {
+                if (e.target.classList.contains('download-invoice')) {
+                    const orderId = e.target.getAttribute('data-id');
+                    const order = orders.find(o => o.id == orderId);
+                    const invoiceContent = `
+                        Rechnung #${order.id}
+                        Datum: ${new Date(order.date).toLocaleString()}
+                        Kunde: ${order.name}
+                        E-Mail: ${order.email}
+                        Lieferadresse: ${order.address}, ${order.city}, ${order.country}
+
+                        Artikel:
+                        ${order.items.map(item => `${item.name} - ${item.price.toFixed(2)} €`).join('\n')}
+
+                        Gesamt: ${order.total.toFixed(2)} €
+                        Zahlungsmethode: ${order.paymentMethod}
+                    `;
+                    const blob = new Blob([invoiceContent], { type: 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `rechnung-${order.id}.txt`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                }
+            });
+        }
+
+        // Rechtliches in einem Modal öffnen
+        if (footerAgb) {
+            footerAgb.addEventListener('click', (e) => {
+                e.preventDefault();
+                legalModalTitle.textContent = 'AGB';
+                legalModalContent.textContent = legalContent.agb || 'AGB nicht definiert';
+                legalModal.classList.remove('hidden');
+            });
+        }
+
+        if (footerImpressum) {
+            footerImpressum.addEventListener('click', (e) => {
+                e.preventDefault();
+                legalModalTitle.textContent = 'Impressum';
+                legalModalContent.textContent = legalContent.impressum || 'Impressum nicht definiert';
+                legalModal.classList.remove('hidden');
+            });
+        }
+
+        if (footerDatenschutz) {
+            footerDatenschutz.addEventListener('click', (e) => {
+                e.preventDefault();
+                legalModalTitle.textContent = 'Datenschutz';
+                legalModalContent.textContent = legalContent.datenschutz || 'Datenschutz nicht definiert';
+                legalModal.classList.remove('hidden');
+            });
+        }
+
+        if (footerWiderruf) {
+            footerWiderruf.addEventListener('click', (e) => {
+                e.preventDefault();
+                legalModalTitle.textContent = 'Widerrufsrecht';
+                legalModalContent.textContent = legalContent.widerruf || 'Widerrufsrecht nicht definiert';
+                legalModal.classList.remove('hidden');
+            });
+        }
+
+        // Home-Button Funktionalität
+        if (homeBtn) {
+            homeBtn.addEventListener('click', () => {
+                settingsPanel.classList.add('hidden');
+                homeSection.classList.remove('hidden');
+            });
+        }
+
+        // Einstellungen-Button Funktionalität (nur für Admin)
+        if (settingsBtn) {
+            settingsBtn.addEventListener('click', () => {
+                if (currentUser.role === 'admin') {
+                    settingsPanel.classList.remove('hidden');
+                    homeSection.classList.add('hidden');
+                }
+            });
+        }
+
+        // Tab-Navigation
+        Object.keys(tabs).forEach(tab => {
+            if (tabs[tab]) {
+                tabs[tab].addEventListener('click', () => {
+                    Object.values(tabs).forEach(t => t.classList.remove('bg-blue-500', 'text-white'));
+                    Object.values(contents).forEach(c => c.classList.add('hidden'));
+                    tabs[tab].classList.add('bg-blue-500', 'text-white');
+                    contents[tab].classList.remove('hidden');
+                    homeSection.classList.add('hidden');
+                });
+            }
+        });
+
+        // Hauptbanner Drag-and-Drop
+        if (mainBannerDropzone) {
+            mainBannerDropzone.addEventListener('click', () => mainBannerInput.click());
+            mainBannerDropzone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                mainBannerDropzone.classList.add('drag-over');
+            });
+            mainBannerDropzone.addEventListener('dragleave', () => {
+                mainBannerDropzone.classList.remove('drag-over');
+            });
+            mainBannerDropzone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                mainBannerDropzone.classList.remove('drag-over');
+                const file = e.dataTransfer.files[0];
+                if (file && file.type.startsWith('image/') && mainBanner) {
+                    const url = URL.createObjectURL(file);
+                    mainBanner.src = url;
+                    mainBannerPreview.src = url;
+                    mainBannerPreview.classList.remove('hidden');
+                }
+            });
+        }
+
+        if (mainBannerInput) {
+            mainBannerInput.addEventListener('change', () => {
+                const file = mainBannerInput.files[0];
+                if (file && mainBanner) {
+                    const url = URL.createObjectURL(file);
+                    mainBanner.src = url;
+                    mainBannerPreview.src = url;
+                    mainBannerPreview.classList.remove('hidden');
+                }
+            });
+        }
+
+        // Manuelles Produkt hinzufügen
+        if (manualProductImage && manualProductImage.parentElement) {
+            manualProductImage.parentElement.addEventListener('click', () => manualProductImage.click());
+        }
+        if (manualProductBanner && manualProductBanner.parentElement) {
+            manualProductBanner.parentElement.addEventListener('click', () => manualProductBanner.click());
+        }
+        if (addManualProduct) {
+            addManualProduct.addEventListener('click', () => {
+                const name = manualProductName.value;
+                const price = parseFloat(manualProductPrice.value);
+                const category = manualProductCategory.value;
+                const imageFile = manualProductImage.files[0];
+                const bannerFile = manualProductBanner.files[0];
+
+                if (!name || !price || !imageFile) {
+                    alert('Bitte füllen Sie alle erforderlichen Felder aus (Name, Preis, Bild).');
+                    return;
+                }
+
+                const imageUrl = URL.createObjectURL(imageFile);
+                const bannerUrl = bannerFile ? URL.createObjectURL(bannerFile) : '';
+                const productId = printfulProducts.length + 1;
+
+                printfulProducts.push({
+                    id: productId,
+                    name,
+                    price,
+                    image: imageUrl,
+                    banner: bannerUrl,
+                    category
+                });
+
+                // Produkt zur Kategorie hinzufügen und Startseite aktualisieren
+                if (!categories[category]) {
+                    categories[category] = [];
+                }
+                categories[category].push({ id: productId, name, price, image: imageUrl, banner: bannerUrl });
+                updateCategories();
+
+                // Formular zurücksetzen
+                manualProductName.value = '';
+                manualProductPrice.value = '';
+                manualProductCategory.value = 'Kleidung';
+                manualProductImage.value = '';
+                manualProductBanner.value = '';
+            });
+        }
+
+        // Printful Produkte laden (simuliert)
+        if (loadPrintfulProducts) {
+            loadPrintfulProducts.addEventListener('click', () => {
+                const apiKey = document.getElementById('printful-api-key').value;
+                if (!apiKey) {
+                    alert('Bitte geben Sie einen Printful API-Schlüssel ein.');
+                    return;
+                }
+
+                // Simulierte Printful-Produkte
+                printfulProducts = [
+                    { id: 1, name: 'T-Shirt Weiß', price: 29.99, image: 'https://via.placeholder.com/150', banner: '', category: 'Kleidung' },
+                    { id: 2, name: 'Hoodie Schwarz', price: 49.99, image: 'https://via.placeholder.com/150', banner: '', category: 'Kleidung' },
+                    { id: 3, name: 'Poster A3', price: 15.99, image: 'https://via.placeholder.com/150', banner: '', category: 'Dekoration' }
+                ];
+
+                printfulProductsList.innerHTML = '';
+                printfulProducts.forEach(product => {
+                    const productItem = document.createElement('div');
+                    productItem.className = 'flex items-center justify-between p-2 border-b';
+                    productItem.innerHTML = `
+                        <div>
+                            <p><strong>${product.name}</strong> - ${product.price.toFixed(2)} €</p>
+                            <p>Kategorie: <select id="category-${product.id}" class="p-1 border rounded">
+                                <option value="Kleidung" ${product.category === 'Kleidung' ? 'selected' : ''}>Kleidung</option>
+                                <option value="Accessoires" ${product.category === 'Accessoires' ? 'selected' : ''}>Accessoires</option>
+                                <option value="Dekoration" ${product.category === 'Dekoration' ? 'selected' : ''}>Dekoration</option>
+                            </select></p>
+                            <img src="${product.image}" alt="${product.name}" class="w-16 h-16 object-cover">
+                            <div id="banner-dropzone-${product.id}" class="border-2 border-dashed p-2 rounded text-center cursor-pointer mt-2 wiggle-on-click">
+                                <p>Ziehen Sie ein Banner-Bild hierher oder klicken Sie, um eine Datei auszuwählen</p>
+                                <input id="banner-input-${product.id}" type="file" accept="image/*" class="hidden">
+                            </div>
+                            <img id="banner-preview-${product.id}" src="" alt="Banner-Vorschau" class="w-full h-12 object-cover rounded mt-2 hidden">
+                        </div>
+                        <button class="bg-green-500 text-white px-4 py-2 rounded upload-product wiggle-on-click" data-id="${product.id}">Zum Shop hinzufügen</button>
+                    `;
+                    printfulProductsList.appendChild(productItem);
+
+                    // Kategorie ändern
+                    const categorySelect = document.getElementById(`category-${product.id}`);
+                    if (categorySelect) {
+                        categorySelect.addEventListener('change', () => {
+                            product.category = categorySelect.value;
+                        });
+                    }
+
+                    // Banner Drag-and-Drop für jedes Produkt
+                    const dropzone = document.getElementById(`banner-dropzone-${product.id}`);
+                    const input = document.getElementById(`banner-input-${product.id}`);
+                    const preview = document.getElementById(`banner-preview-${product.id}`);
+
+                    if (dropzone) {
+                        dropzone.addEventListener('click', () => input.click());
+                        dropzone.addEventListener('dragover', (e) => {
+                            e.preventDefault();
+                            dropzone.classList.add('drag-over');
+                        });
+                        dropzone.addEventListener('dragleave', () => {
+                            dropzone.classList.remove('drag-over');
+                        });
+                        dropzone.addEventListener('drop', (e) => {
+                            e.preventDefault();
+                            dropzone.classList.remove('drag-over');
+                            const file = e.dataTransfer.files[0];
+                            if (file && file.type.startsWith('image/')) {
+                                const url = URL.createObjectURL(file);
+                                preview.src = url;
+                                preview.classList.remove('hidden');
+                                product.banner = url;
+                            }
+                        });
+                    }
+
+                    if (input) {
+                        input.addEventListener('change', () => {
+                            const file = input.files[0];
+                            if (file) {
+                                const url = URL.createObjectURL(file);
+                                preview.src = url;
+                                preview.classList.remove('hidden');
+                                product.banner = url;
+                            }
+                        });
+                    }
+                });
+
+                // "Alle Produkte reinladen"-Button anzeigen
+                uploadAllProducts.classList.remove('hidden');
+
+                // Event-Listener für einzelnes Hinzufügen
+                document.querySelectorAll('.upload-product').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        const productId = e.target.getAttribute('data-id');
+                        addProductToShop(productId);
+                        e.target.disabled = true;
+                        e.target.textContent = 'Hinzugefügt';
+                    });
+                });
+            });
+        }
+
+        // Funktion zum Hinzufügen eines Produkts in den Shop
+        function addProductToShop(productId) {
+            const product = printfulProducts.find(p => p.id == productId);
+            if (!categories[product.category]) {
+                categories[product.category] = [];
+            }
+            categories[product.category].push(product);
+            updateCategories();
+        }
+
+        // Alle Produkte reinladen
+        if (uploadAllProducts) {
+            uploadAllProducts.addEventListener('click', () => {
+                printfulProducts.forEach(product => {
+                    if (!categories[product.category]) {
+                        categories[product.category] = [];
+                    }
+                    if (!categories[product.category].some(p => p.id === product.id)) {
+                        categories[product.category].push(product);
+                    }
+                });
+                updateCategories();
+                document.querySelectorAll('.upload-product').forEach(button => {
+                    button.disabled = true;
+                    button.textContent = 'Hinzugefügt';
+                });
+                uploadAllProducts.disabled = true;
+                uploadAllProducts.textContent = 'Alle Produkte hinzugefügt';
+            });
+        }
+
+        // Kategorien auf der Startseite aktualisieren
+        function updateCategories() {
+            if (!productCategories) return;
+            productCategories.innerHTML = '';
+            Object.keys(categories).forEach(category => {
+                const categorySection = document.createElement('div');
+                categorySection.className = 'mb-8';
+                categorySection.innerHTML = `<h2 class="text-2xl font-bold mb-4">${category}</h2>`;
+                const productGrid = document.createElement('div');
+                productGrid.className = 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6';
+                categories[category].forEach(product => {
+                    const productCard = document.createElement('div');
+                    productCard.className = 'product-card bg-white p-4 rounded-lg shadow hover:shadow-lg transition-shadow';
+                    productCard.innerHTML = `
+                        ${product.banner ? `<img src="${product.banner}" alt="Banner" class="w-full h-12 object-cover rounded">` : ''}
+                        <img src="${product.image}" alt="${product.name}" class="w-full h-40 object-cover rounded ${product.banner ? 'mt-2' : ''}">
+                        <h3 class="text-lg font-semibold mt-2">${product.name}</h3>
+                        <p class="text-gray-600">${product.price.toFixed(2)} €</p>
+                        <button class="add-to-cart bg-blue-500 text-white px-4 py-2 rounded mt-2 w-full wiggle-on-click" data-id="${product.id}">In den Warenkorb</button>
+                    `;
+                    productGrid.appendChild(productCard);
+                });
+                categorySection.appendChild(productGrid);
+                productCategories.appendChild(categorySection);
+            });
+
+            // Event-Listener für "In den Warenkorb" Buttons
+            document.querySelectorAll('.add-to-cart').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const productId = e.target.getAttribute('data-id');
+                    const product = printfulProducts.find(p => p.id == productId);
+                    cart.push({ ...product });
+                    updateCart();
+                    e.target.closest('.product-card').classList.add('wiggle');
+                });
+            });
+        }
+
+        // Login-Modal anzeigen
+        if (loginBtn) {
+            loginBtn.addEventListener('click', () => {
+                loginModal.classList.toggle('hidden');
+                if (currentUser.role !== 'gast') {
+                    logoutBtn.classList.remove('hidden');
+                    loginForm.classList.add('hidden');
+                    loginSubmitBtn.classList.add('hidden');
+                    // Wenn Admin angemeldet ist, zu den Einstellungen navigieren
+                    if (currentUser.role === 'admin') {
+                        settingsPanel.classList.remove('hidden');
+                        homeSection.classList.add('hidden');
+                    }
+                } else {
+                    logoutBtn.classList.add('hidden');
+                    loginForm.classList.remove('hidden');
+                    loginSubmitBtn.classList.remove('hidden');
+                }
+            });
+        }
+
+        // Admin-Schlüssel-Feld anzeigen
+        if (adminCheckbox) {
+            adminCheckbox.addEventListener('change', () => {
+                adminKeyField.classList.toggle('hidden', !adminCheckbox.checked);
+            });
+        }
+
+        // Icon in den Anmelde-Button übertragen
+        document.querySelectorAll('input[name="icon"]').forEach(radio => {
+            radio.addEventListener('change', () => {
+                const selectedIcon = radio.value;
+                loginIconPlaceholder.innerHTML = icons[selectedIcon];
+            });
+        });
+
+        // Anmeldung
+        if (loginForm) {
+            loginForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const email = document.getElementById('login-email').value;
+                const password = document.getElementById('login-password').value;
+                const adminKey = document.getElementById('admin-key').value;
+                const selectedIcon = document.querySelector('input[name="icon"]:checked')?.value;
+
+                if (users[email] && users[email].password === password) {
+                    if (adminCheckbox.checked && users[email].role === 'admin' && users[email].key === adminKey) {
+                        currentUser = { role: 'admin', email, icon: selectedIcon };
+                        userStatus.innerHTML = `Angemeldet als: Admin ${icons[selectedIcon] || ''}`;
+                        settingsPanel.classList.remove('hidden');
+                        homeSection.classList.add('hidden');
+                    } else if (!adminCheckbox.checked && users[email].role === 'kunde') {
+                        currentUser = { role: 'kunde', email, icon: selectedIcon };
+                        userStatus.innerHTML = `Angemeldet als: Kunde ${icons[selectedIcon] || ''}`;
+                    } else {
+                        alert('Ungültige Anmeldedaten oder Schlüssel.');
+                        return;
+                    }
+                    if (selectedIcon) {
+                        userIcon.innerHTML = icons[selectedIcon];
+                        userIcon.classList.remove('hidden');
+                    }
+                    loginModal.classList.add('hidden');
+                    loginForm.reset();
+                } else {
+                    alert('Ungültige E-Mail oder Passwort.');
+                }
+            });
+        }
+
+        // Abbrechen
+        if (cancelLogin) {
+            cancelLogin.addEventListener('click', () => {
+                loginModal.classList.add('hidden');
+                loginForm.reset();
+            });
+        }
+
+        // Abmeldung
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => {
+                currentUser = { role: 'gast', icon: '' };
+                userStatus.innerHTML = 'Angemeldet als: Gast';
+                userIcon.classList.add('hidden');
+                settingsPanel.classList.add('hidden');
+                loginModal.classList.add('hidden');
+                homeSection.classList.remove('hidden');
+                settingsBtn.classList.add('hidden'); // Einstellungen-Button verstecken
+            });
+        }
+
+        // Einstellungen speichern
+        if (settingsForm) {
+            settingsForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const shopName = document.getElementById('settings-shop-name').value;
+                const youtube = document.getElementById('settings-youtube').value;
+                const tiktok = document.getElementById('settings-tiktok').value;
+                const instagram = document.getElementById('settings-instagram').value;
+                const phone = document.getElementById('settings-phone').value;
+                const hours = document.getElementById('settings-hours').value;
+                const footerText = document.getElementById('settings-footer-text').value;
+
+                // Shop-Name aktualisieren
+                document.getElementById('shop-name').textContent = shopName;
+                document.getElementById('footer-shop-name').textContent = shopName;
+
+                // Telefon und Öffnungszeiten aktualisieren
+                document.getElementById('footer-phone').textContent = `Telefon: ${phone}`;
+                document.getElementById('footer-hours').textContent = hours;
+
+                // Footer-Text aktualisieren
+                document.getElementById('footer-text').textContent = footerText;
+
+                // Social Media Links aktualisieren
+                document.getElementById('footer-youtube').href = youtube;
+                document.getElementById('footer-tiktok').href = tiktok;
+                document.getElementById('footer-instagram').href = instagram;
+            });
+        }
+
+        // Zahlungseinstellungen speichern
+        if (paymentForm) {
+            paymentForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                paymentSettings.creditcard = document.getElementById('payment-creditcard').checked;
+                paymentSettings.paypal = document.getElementById('payment-paypal').checked;
+                paymentSettings.stripe = document.getElementById('payment-stripe').checked;
+                paymentSettings.paypalApiKey = document.getElementById('paypal-api-key').value;
+                paymentSettings.stripeApiKey = document.getElementById('stripe-api-key').value;
+            });
+        }
+
+        // Rechtliches speichern
+        if (document.getElementById('legal-form')) {
+            document.getElementById('legal-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                legalContent.agb = document.getElementById('legal-agb').value;
+                legalContent.impressum = document.getElementById('legal-impressum').value;
+                legalContent.datenschutz = document.getElementById('legal-datenschutz').value;
+                legalContent.widerruf = document.getElementById('legal-widerruf').value;
+            });
+        }
+
+        // Admin-Schlüssel ändern
+        if (changeAdminKey) {
+            changeAdminKey.addEventListener('click', () => {
+                const newKey = document.getElementById('new-admin-key').value;
+                if (newKey) {
+                    users['admin@example.com'].key = newKey;
+                    users['astroversearchiv@gmail.com'].key = newKey;
+                    alert('Admin-Schlüssel erfolgreich geändert!');
+                } else {
+                    alert('Bitte einen neuen Schlüssel eingeben.');
+                }
+            });
+        }
+
+        // Monatliche Umsatz-Aktualisierung
+        setInterval(() => {
+            const now = new Date();
+            if (now.getDate() === 1) {
+                monthlyRevenue = 0;
+                document.getElementById('monthly-revenue').textContent = `${monthlyRevenue.toFixed(2)} €`;
+            }
+        }, 24 * 60 * 60 * 1000); // Jeden Tag prüfen
+
+        // Initiale Kategorien laden
+        updateCategories();
+    </script>
+</body>
+</html>
